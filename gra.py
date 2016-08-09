@@ -1,5 +1,5 @@
 import random
-
+import math
 import pyglet
 import pyglet.graphics
 import pyglet.resource
@@ -96,6 +96,8 @@ class Hero(Brick):
             
             
 class Monster(Brick):
+    STEP = 0.3
+    VISION_RADIUS = 5
     def __init__(self):
         self.monster_image = pyglet.resource.image('troll.png')
         super().__init__(self.monster_image)
@@ -111,8 +113,12 @@ class Monster(Brick):
         self.col = col
         self.row = row
     
-    
-
+    def monster_movement(self):
+        if math.hypot(monster.col, monster.row) and math.hypot(self.hero.col, self.hero.row):
+            print (aaa)
+        else:
+            
+            
         
 class Game(pyglet.window.Window):
     STEP = 0.25  # Seconds
