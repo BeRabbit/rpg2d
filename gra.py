@@ -52,7 +52,9 @@ class Brick(pyglet.sprite.Sprite):
         
 class Wall(Brick):
     pass
-
+class Floor(Brick):
+    pass
+    
 class UP: dcol = 0; drow = -1; image_fname = 'hero_up.png'
 class RIGHT: dcol = 1; drow = 0; image_fname = 'hero_right.png'
 class DOWN: dcol = 0; drow = 1; image_fname = 'hero_down.png'
@@ -69,22 +71,47 @@ class Hero(Brick):
 
 
     def on_key_press(self, symbol, modifiers):
+        should_move = False
         if symbol == key.UP:
             self.direction = UP
+            should_move = True
         elif symbol == key.RIGHT:
             self.direction = RIGHT
+            should_move = True
         elif symbol == key.DOWN:
             self.direction = DOWN
+            should_move = True
         elif symbol == key.LEFT:
             self.direction = LEFT
-        self.image = pyglet.resource.image(self.direction.image_fname)
+            should_move = True
+            
+        if should_move:
+            self.image = pyglet.resource.image(self.direction.image_fname)
+            col, row = self.col + self.direction.dcol, self.row + self.direction.drow
+            for brick in self.bricks:
+                if col == brick.col and row == brick.row and isinstance(brick, Wall):
+                    break
+            else:
+                self.col, self.row = col, row
+            
+            
+class Monster(Brick):
+    def __init__(self):
+        self.monster_image = pyglet.resource.image('troll.png')
+        super().__init__(self.monster_image)
         
-        col, row = self.col + self.direction.dcol, self.row + self.direction.drow
-        for brick in self.bricks:
-            if col == brick.col and row == brick.row and isinstance(brick, Wall):
-                break
-        else:
-            self.col, self.row = col, row
+        while True:
+            col = random.randint(1, self.game.COLUMNS-2)
+            row = random.randint(1, self.game.ROWS-2)
+            for brick in self.bricks:
+                if col == brick.col and row == brick.row and not isinstance(brick, Floor):
+                    break
+            else:
+                break  # No collision
+        self.col = col
+        self.row = row
+    
+    
 
         
 class Game(pyglet.window.Window):
@@ -112,15 +139,18 @@ class Game(pyglet.window.Window):
                         or row == self.ROWS-1 or col == self.COLUMNS-1):
                     Wall(self.brick_image, col, row)
                 else:
-                    Brick(self.ground_image, col, row)
+                    Floor(self.ground_image, col, row)
 
-        self.hero = None
+        self.hero = self.monster = None
 
 
     def start(self):
         if self.hero:
             self.hero.delete()
         self.hero = Hero(self)
+        if self.monster:
+            self.monster.delete()
+        self.monster = Monster()
         pyglet.clock.unschedule(self.update)
         pyglet.clock.tick()
         pyglet.clock.schedule(func=self.update)
