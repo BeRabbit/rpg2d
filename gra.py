@@ -40,7 +40,11 @@ class Brick(pyglet.sprite.Sprite):
         self.dirty.add(self)
 
     def place(self):
-        self.scale = self.game.brick_scale
+        try:
+            self.scale = self.game.brick_scale
+        except AttributeError as e:
+            print(type(self))
+            raise
         self.x = self.game.base_x + self.col * self.game.brick_px
         self.y = self.game.base_y - (self.row + 1) * self.game.brick_px  # +1 because of anchor point
 
@@ -48,6 +52,14 @@ class Brick(pyglet.sprite.Sprite):
         self.dirty.discard(self)
         self.bricks.remove(self)
         super().delete()
+    
+    @classmethod
+    def check_if_empty(cls, col, row):
+        for brick in cls.bricks:
+            if col == brick.col and row == brick.row and isinstance(brick, Wall):
+                break
+        else:
+            self.col, self.row = col, row
 
         
 class Wall(Brick):
@@ -61,13 +73,12 @@ class DOWN: dcol = 0; drow = 1; image_fname = 'hero_down.png'
 class LEFT: dcol = -1; drow = 0; image_fname = 'hero_left.png'
 
 class Hero(Brick):
-    def __init__(self, game):
-        col = game.COLUMNS // 2
-        row = game.ROWS // 2
+    def __init__(self):
+        col = self.game.COLUMNS // 2
+        row = self.game.ROWS // 2
         self.direction = RIGHT
         super().__init__(pyglet.resource.image(self.direction.image_fname), col, row)
-        game.push_handlers(self.on_key_press)
-        self.game = game
+        self.game.push_handlers(self.on_key_press)
 
 
     def on_key_press(self, symbol, modifiers):
@@ -93,11 +104,15 @@ class Hero(Brick):
                     break
             else:
                 self.col, self.row = col, row
+    
+    def delete(self):
+        self.game.pop_handlers()
+        super().delete()
             
             
 class Monster(Brick):
-    STEP = 0.3
-    VISION_RADIUS = 5
+    STEP = 0.5
+    VISION_RADIUS = 10
     def __init__(self):
         self.monster_image = pyglet.resource.image('troll.png')
         super().__init__(self.monster_image)
@@ -112,13 +127,39 @@ class Monster(Brick):
                 break  # No collision
         self.col = col
         self.row = row
+        
+        pyglet.clock.schedule_interval(self.move, self.STEP)
     
-    def monster_movement(self):
-        if math.hypot(monster.col, monster.row) and math.hypot(self.hero.col, self.hero.row):
-            print (aaa)
+    
+    def move(self, dt):
+        current_distance = math.hypot(self.col - self.game.hero.col, self.row - self.game.hero.row)
+        
+        if current_distance == 0:
+            pass
+        elif current_distance < self.VISION_RADIUS:
+            best_direction = None
+            best_distance = 99999
+            for direction in (UP, RIGHT, DOWN, LEFT):
+                distance = self.get_step_distance(direction)
+                if distance < best_distance:
+                    best_distance = distance
+                    best_direction = direction
+            self.col += best_direction.dcol
+            self.row += best_direction.drow
         else:
+            direction = random.choice([UP, RIGHT, DOWN, LEFT])
+            self.col += direction.dcol
+            self.row += direction.drow
+
             
-            
+    def get_step_distance(self, direction):
+        col, row = self.col + direction.dcol, self.row + direction.drow
+        return math.hypot(col - self.game.hero.col, row - self.game.hero.row)
+
+    def delete(self):
+        pyglet.clock.unschedule(self.move)
+        super().delete()
+        
         
 class Game(pyglet.window.Window):
     STEP = 0.25  # Seconds
@@ -153,7 +194,7 @@ class Game(pyglet.window.Window):
     def start(self):
         if self.hero:
             self.hero.delete()
-        self.hero = Hero(self)
+        self.hero = Hero()
         if self.monster:
             self.monster.delete()
         self.monster = Monster()
