@@ -57,9 +57,9 @@ class Brick(pyglet.sprite.Sprite):
     def check_if_empty(cls, col, row):
         for brick in cls.bricks:
             if col == brick.col and row == brick.row and isinstance(brick, Wall):
-                break
+                return False
         else:
-            self.col, self.row = col, row
+            return True
 
         
 class Wall(Brick):
@@ -135,7 +135,7 @@ class Monster(Brick):
         current_distance = math.hypot(self.col - self.game.hero.col, self.row - self.game.hero.row)
         
         if current_distance == 0:
-            pass
+            return
         elif current_distance < self.VISION_RADIUS:
             best_direction = None
             best_distance = 99999
@@ -144,12 +144,14 @@ class Monster(Brick):
                 if distance < best_distance:
                     best_distance = distance
                     best_direction = direction
-            self.col += best_direction.dcol
-            self.row += best_direction.drow
         else:
-            direction = random.choice([UP, RIGHT, DOWN, LEFT])
-            self.col += direction.dcol
-            self.row += direction.drow
+            best_direction = random.choice([UP, RIGHT, DOWN, LEFT])
+        
+        new_col = self.col + best_direction.dcol
+        new_row = self.row + best_direction.drow
+        if self.check_if_empty(new_col, new_row):
+            self.col = new_col
+            self.row = new_row
 
             
     def get_step_distance(self, direction):
