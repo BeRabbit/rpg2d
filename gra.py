@@ -9,7 +9,7 @@ from pyglet.window import key
 # Used to order sprites
 background = pyglet.graphics.OrderedGroup(0)
 foreground = pyglet.graphics.OrderedGroup(1)
-
+hud = pyglet.graphics.OrderedGroup(2)
 
 class Brick(pyglet.sprite.Sprite):
     bricks = set()
@@ -73,6 +73,16 @@ class DOWN: dcol = 0; drow = 1; image_fname = 'hero_down.png'
 class LEFT: dcol = -1; drow = 0; image_fname = 'hero_left.png'
 
 class Hero(Brick):
+    health = 10
+    max_health = 10
+    potion = 0
+    xp = 0
+    level = 1
+    armor = 0
+    max_armor = 10
+    sword = 0
+    max_sword = 10
+    
     def __init__(self):
         col = self.game.COLUMNS // 2
         row = self.game.ROWS // 2
@@ -80,7 +90,43 @@ class Hero(Brick):
         super().__init__(pyglet.resource.image(self.direction.image_fname), col, row)
         self.game.push_handlers(self.on_key_press)
 
-
+    def armor_limit(self):
+        if armor >= 10:
+            armor = max_armor
+        
+    def sword_limit(self):    
+        if sword >= 10:
+            sword = max_sword
+        
+    def use_potion(self):
+        if health < max_health:
+            amount = max_health/3
+            health += amount
+            round(self.health)
+            potion -= 1
+        elif potion <= 0:
+            return
+        elif health < max_health:
+            return
+            
+    def xp_up(self, xp):
+        xp += xp
+        print ("Otrzymałeś: %s XP" % xp)
+    
+    def hp_limit(self):
+        if health > max_health:
+            health = max_health
+            
+    def level_up(self):
+        if xp >= level**2 * 10:
+            level += 1
+            print ("Twój poziom postaci się zwiększył ", level)
+            max_health += level
+            health = max_health
+            
+            
+            
+            
     def on_key_press(self, symbol, modifiers):
         should_move = False
         if symbol == key.UP:
@@ -112,7 +158,7 @@ class Hero(Brick):
             
 class Monster(Brick):
     STEP = 0.5
-    VISION_RADIUS = 10
+    VISION_RADIUS = 5
     def __init__(self):
         self.monster_image = pyglet.resource.image('troll.png')
         super().__init__(self.monster_image)
@@ -164,9 +210,10 @@ class Monster(Brick):
         
         
 class Game(pyglet.window.Window):
-    STEP = 0.25  # Seconds
+    STEP = 0.3  # Seconds
     COLUMNS = 32
     ROWS = 18
+    HUD_HEIGHT = 50
 
     def __init__(self):
         super().__init__(resizable=True)
@@ -174,7 +221,44 @@ class Game(pyglet.window.Window):
         self.batch = pyglet.graphics.Batch()
         self.keys = key.KeyStateHandler()
         self.push_handlers(self.keys)
-
+        self.score = 0
+        
+        self.label = pyglet.text.Label(
+                'Press R to Start', 'Times New Roman', 36,
+                color=(255, 0, 0, 255),
+                anchor_x='center', anchor_y='center',
+                batch=self.batch, group=hud)
+        self.level_label = pyglet.text.Label(
+                '', 'Times New Roman', 10,
+                color=(255, 255, 0, 255),
+                anchor_x='right', anchor_y='bottom',
+                batch=self.batch, group=hud)
+        self.xp_label = pyglet.text.Label(
+                '', 'Times New Roman', 10,
+                color=(255, 255, 0, 255),
+                anchor_x='right', anchor_y='top',
+                batch=self.batch, group=hud)        
+        self.health_label = pyglet.text.Label(
+                '', 'Times New Roman', 10,
+                color=(255, 255, 0, 255),
+                anchor_x='center', anchor_y='bottom',
+                batch=self.batch, group=hud)
+        self.potion_label = pyglet.text.Label(
+                '', 'Times New Roman', 10,
+                color=(255, 255, 0, 255),
+                anchor_x='center', anchor_y='top',
+                batch=self.batch, group=hud)
+        self.armor_label = pyglet.text.Label(
+                '', 'Times New Roman', 10,
+                color=(255, 255, 0, 255),
+                anchor_x='right', anchor_y='bottom',
+                batch=self.batch, group=hud)
+        self.sword_label = pyglet.text.Label(
+                '', 'Times New Roman', 10,
+                color=(255, 255, 0, 255),
+                anchor_x='right', anchor_y='top',
+                batch=self.batch, group=hud)
+                
         self.back_image = pyglet.resource.image('background.png')
         self.back = pyglet.sprite.Sprite(
                 self.back_image, batch=self.batch, group=background)
@@ -203,19 +287,55 @@ class Game(pyglet.window.Window):
         pyglet.clock.unschedule(self.update)
         pyglet.clock.tick()
         pyglet.clock.schedule(func=self.update)
+        self.label.text = ""
         self.time = 0.0
-
+        self.set_label_text()
+        
+    def set_label_text(self):
+        self.level_label.text = "LEVEL: %s" % (self.hero.level)
+        self.xp_label.text = "XP: %s / %s" % (self.hero.xp, self.hero.level**2 * 10 - self.hero.xp)
+        self.health_label.text = "HP: %s / %s" % (self.hero.health, self.hero.max_health)
+        self.potion_label.text = "POTIONS: %s" % (self.hero.potion)
+        self.sword_label.text = "SWORD PIECES: %s / %s" % (self.hero.sword, self.hero.max_sword)
+        self.armor_label.text = "ARMOR PIECES: %s / %s" % (self.hero.armor, self.hero.max_armor)    
+   
+    def set_score(self, v):
+        self.score = v
+        self.score_label.text = str(self.score)
+        
 
     def on_resize(self, width, height):
         super().on_resize(width, height)
         self.back.scale = max(
                 width / self.back_image.width, height / self.back_image.height)
 
-        self.brick_px = min(width / self.COLUMNS, height / self.ROWS)
+        self.brick_px = min(width / self.COLUMNS, (height - self.HUD_HEIGHT) / self.ROWS)
         self.brick_scale = self.brick_px / self.brick_image.width
         self.base_x = (width - self.brick_px * self.COLUMNS) / 2
-        self.base_y = height - (height - self.brick_px * self.ROWS) / 2
+        self.base_y = height - (height - self.brick_px * self.ROWS + self.HUD_HEIGHT) / 2
+        
+        self.label.x = self.width // 2
+        self.label.y = self.height // 2
+        
+        self.level_label.x = self.width // 6
+        self.level_label.y = self.base_y + self.HUD_HEIGHT // 2
+        
+        self.xp_label.x = self.width // 6
+        self.xp_label.y = self.base_y + self.HUD_HEIGHT // 2
+        
+        self.health_label.x = self.width // 2
+        self.health_label.y = self.base_y + self.HUD_HEIGHT // 2
+        
+        self.potion_label.x = self.width // 2
+        self.potion_label.y = self.base_y + self.HUD_HEIGHT // 2
+        
+        self.sword_label.x = self.width // 1.1
+        self.sword_label.y = self.base_y + self.HUD_HEIGHT // 2
 
+        self.armor_label.x = self.width // 1.1
+        self.armor_label.y = self.base_y + self.HUD_HEIGHT // 2
+        
+        
         Brick.dirty |= Brick.bricks
 
 
