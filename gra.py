@@ -51,12 +51,12 @@ class Brick(pyglet.sprite.Sprite):
         super().delete()
 
     @classmethod
-    def check_if_empty(cls, col, row):
+    def check_collision(cls, col, row):
         for brick in cls.bricks:
             if col == brick.col and row == brick.row and isinstance(brick, (Wall, Monster, Hero)):
-                return False
+                return brick
         else:
-            return True
+            return  # No collision, return None
 
 
 class Wall(Brick):
@@ -140,7 +140,7 @@ class Hero(Brick):
         if should_move:
             self.image = pyglet.resource.image(self.direction.image_fname)
             col, row = self.col + self.direction.dcol, self.row + self.direction.drow
-            if self.check_if_empty(col, row):
+            if not self.check_collision(col, row):
                 self.col, self.row = col, row
 
     def delete(self):
@@ -158,7 +158,7 @@ class Monster(Brick):
         while True:
             col = random.randint(1, self.game.COLUMNS-2)
             row = random.randint(1, self.game.ROWS-2)
-            if self.check_if_empty(col, row):
+            if not self.check_collision(col, row):
                 break
         self.col = col
         self.row = row
@@ -184,7 +184,7 @@ class Monster(Brick):
 
         new_col = self.col + best_direction.dcol
         new_row = self.row + best_direction.drow
-        if self.check_if_empty(new_col, new_row):
+        if not self.check_collision(new_col, new_row):
             self.col = new_col
             self.row = new_row
 
