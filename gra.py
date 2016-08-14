@@ -11,6 +11,7 @@ background = pyglet.graphics.OrderedGroup(0)
 foreground = pyglet.graphics.OrderedGroup(1)
 hud = pyglet.graphics.OrderedGroup(2)
 
+
 class Brick(pyglet.sprite.Sprite):
     bricks = set()
     dirty = set()
@@ -40,11 +41,7 @@ class Brick(pyglet.sprite.Sprite):
         self.dirty.add(self)
 
     def place(self):
-        try:
-            self.scale = self.game.brick_scale
-        except AttributeError as e:
-            print(type(self))
-            raise
+        self.scale = self.game.brick_scale
         self.x = self.game.base_x + self.col * self.game.brick_px
         self.y = self.game.base_y - (self.row + 1) * self.game.brick_px  # +1 because of anchor point
 
@@ -52,21 +49,21 @@ class Brick(pyglet.sprite.Sprite):
         self.dirty.discard(self)
         self.bricks.remove(self)
         super().delete()
-    
+
     @classmethod
     def check_if_empty(cls, col, row):
         for brick in cls.bricks:
-            if col == brick.col and row == brick.row and isinstance(brick, Wall):
+            if col == brick.col and row == brick.row and isinstance(brick, (Wall, Monster, Hero)):
                 return False
         else:
             return True
 
-        
+
 class Wall(Brick):
     pass
 class Floor(Brick):
     pass
-    
+
 class UP: dcol = 0; drow = -1; image_fname = 'hero_up.png'
 class RIGHT: dcol = 1; drow = 0; image_fname = 'hero_right.png'
 class DOWN: dcol = 0; drow = 1; image_fname = 'hero_down.png'
@@ -82,7 +79,7 @@ class Hero(Brick):
     max_armor = 10
     sword = 0
     max_sword = 10
-    
+
     def __init__(self):
         col = self.game.COLUMNS // 2
         row = self.game.ROWS // 2
@@ -93,11 +90,11 @@ class Hero(Brick):
     def armor_limit(self):
         if armor >= 10:
             armor = max_armor
-        
-    def sword_limit(self):    
+
+    def sword_limit(self):
         if sword >= 10:
             sword = max_sword
-        
+
     def use_potion(self):
         if health < max_health:
             amount = max_health/3
@@ -108,25 +105,23 @@ class Hero(Brick):
             return
         elif health < max_health:
             return
-            
+
     def xp_up(self, xp):
         xp += xp
         print ("Otrzymałeś: %s XP" % xp)
-    
+
     def hp_limit(self):
         if health > max_health:
             health = max_health
-            
+
     def level_up(self):
         if xp >= level**2 * 10:
             level += 1
             print ("Twój poziom postaci się zwiększył ", level)
             max_health += level
             health = max_health
-            
-            
-            
-            
+
+
     def on_key_press(self, symbol, modifiers):
         should_move = False
         if symbol == key.UP:
@@ -141,45 +136,39 @@ class Hero(Brick):
         elif symbol == key.LEFT:
             self.direction = LEFT
             should_move = True
-            
+
         if should_move:
             self.image = pyglet.resource.image(self.direction.image_fname)
             col, row = self.col + self.direction.dcol, self.row + self.direction.drow
-            for brick in self.bricks:
-                if col == brick.col and row == brick.row and isinstance(brick, Wall):
-                    break
-            else:
+            if self.check_if_empty(col, row):
                 self.col, self.row = col, row
-    
+
     def delete(self):
         self.game.pop_handlers()
         super().delete()
-            
-            
+
+
 class Monster(Brick):
     STEP = 0.5
     VISION_RADIUS = 5
     def __init__(self):
         self.monster_image = pyglet.resource.image('troll.png')
         super().__init__(self.monster_image)
-        
+
         while True:
             col = random.randint(1, self.game.COLUMNS-2)
             row = random.randint(1, self.game.ROWS-2)
-            for brick in self.bricks:
-                if col == brick.col and row == brick.row and not isinstance(brick, Floor):
-                    break
-            else:
-                break  # No collision
+            if self.check_if_empty(col, row):
+                break
         self.col = col
         self.row = row
-        
-        pyglet.clock.schedule_interval(self.move, self.STEP)
-    
-    
+
+        pyglet.clock.schedule_interval(self.move, self.STEP - 0.1 * random.random())
+
+
     def move(self, dt):
         current_distance = math.hypot(self.col - self.game.hero.col, self.row - self.game.hero.row)
-        
+
         if current_distance == 0:
             return
         elif current_distance < self.VISION_RADIUS:
@@ -192,14 +181,14 @@ class Monster(Brick):
                     best_direction = direction
         else:
             best_direction = random.choice([UP, RIGHT, DOWN, LEFT])
-        
+
         new_col = self.col + best_direction.dcol
         new_row = self.row + best_direction.drow
         if self.check_if_empty(new_col, new_row):
             self.col = new_col
             self.row = new_row
 
-            
+
     def get_step_distance(self, direction):
         col, row = self.col + direction.dcol, self.row + direction.drow
         return math.hypot(col - self.game.hero.col, row - self.game.hero.row)
@@ -207,8 +196,8 @@ class Monster(Brick):
     def delete(self):
         pyglet.clock.unschedule(self.move)
         super().delete()
-        
-        
+
+
 class Game(pyglet.window.Window):
     STEP = 0.3  # Seconds
     COLUMNS = 32
@@ -222,7 +211,7 @@ class Game(pyglet.window.Window):
         self.keys = key.KeyStateHandler()
         self.push_handlers(self.keys)
         self.score = 0
-        
+
         self.label = pyglet.text.Label(
                 'Press R to Start', 'Times New Roman', 36,
                 color=(255, 0, 0, 255),
@@ -237,7 +226,7 @@ class Game(pyglet.window.Window):
                 '', 'Times New Roman', 10,
                 color=(255, 255, 0, 255),
                 anchor_x='right', anchor_y='top',
-                batch=self.batch, group=hud)        
+                batch=self.batch, group=hud)
         self.health_label = pyglet.text.Label(
                 '', 'Times New Roman', 10,
                 color=(255, 255, 0, 255),
@@ -258,7 +247,7 @@ class Game(pyglet.window.Window):
                 color=(255, 255, 0, 255),
                 anchor_x='right', anchor_y='top',
                 batch=self.batch, group=hud)
-                
+
         self.back_image = pyglet.resource.image('background.png')
         self.back = pyglet.sprite.Sprite(
                 self.back_image, batch=self.batch, group=background)
@@ -274,35 +263,36 @@ class Game(pyglet.window.Window):
                 else:
                     Floor(self.ground_image, col, row)
 
-        self.hero = self.monster = None
+        self.hero = self.monsters = None
 
 
     def start(self):
         if self.hero:
             self.hero.delete()
         self.hero = Hero()
-        if self.monster:
-            self.monster.delete()
-        self.monster = Monster()
+        if self.monsters:
+            for monster in self.monsters:
+                monster.delete()
+        self.monsters = {Monster() for x in range(100)}
         pyglet.clock.unschedule(self.update)
         pyglet.clock.tick()
         pyglet.clock.schedule(func=self.update)
         self.label.text = ""
         self.time = 0.0
         self.set_label_text()
-        
+
     def set_label_text(self):
         self.level_label.text = "LEVEL: %s" % (self.hero.level)
         self.xp_label.text = "XP: %s / %s" % (self.hero.xp, self.hero.level**2 * 10 - self.hero.xp)
         self.health_label.text = "HP: %s / %s" % (self.hero.health, self.hero.max_health)
         self.potion_label.text = "POTIONS: %s" % (self.hero.potion)
         self.sword_label.text = "SWORD PIECES: %s / %s" % (self.hero.sword, self.hero.max_sword)
-        self.armor_label.text = "ARMOR PIECES: %s / %s" % (self.hero.armor, self.hero.max_armor)    
-   
+        self.armor_label.text = "ARMOR PIECES: %s / %s" % (self.hero.armor, self.hero.max_armor)
+
     def set_score(self, v):
         self.score = v
         self.score_label.text = str(self.score)
-        
+
 
     def on_resize(self, width, height):
         super().on_resize(width, height)
@@ -313,29 +303,28 @@ class Game(pyglet.window.Window):
         self.brick_scale = self.brick_px / self.brick_image.width
         self.base_x = (width - self.brick_px * self.COLUMNS) / 2
         self.base_y = height - (height - self.brick_px * self.ROWS + self.HUD_HEIGHT) / 2
-        
+
         self.label.x = self.width // 2
         self.label.y = self.height // 2
-        
+
         self.level_label.x = self.width // 6
         self.level_label.y = self.base_y + self.HUD_HEIGHT // 2
-        
+
         self.xp_label.x = self.width // 6
         self.xp_label.y = self.base_y + self.HUD_HEIGHT // 2
-        
+
         self.health_label.x = self.width // 2
         self.health_label.y = self.base_y + self.HUD_HEIGHT // 2
-        
+
         self.potion_label.x = self.width // 2
         self.potion_label.y = self.base_y + self.HUD_HEIGHT // 2
-        
+
         self.sword_label.x = self.width // 1.1
         self.sword_label.y = self.base_y + self.HUD_HEIGHT // 2
 
         self.armor_label.x = self.width // 1.1
         self.armor_label.y = self.base_y + self.HUD_HEIGHT // 2
-        
-        
+
         Brick.dirty |= Brick.bricks
 
 
