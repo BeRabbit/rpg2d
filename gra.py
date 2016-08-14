@@ -1,5 +1,7 @@
-import random
+import logging as log
 import math
+import random
+
 import pyglet
 import pyglet.graphics
 import pyglet.resource
@@ -10,6 +12,9 @@ from pyglet.window import key
 background = pyglet.graphics.OrderedGroup(0)
 foreground = pyglet.graphics.OrderedGroup(1)
 hud = pyglet.graphics.OrderedGroup(2)
+
+
+log.basicConfig(level=log.DEBUG)
 
 
 class Brick(pyglet.sprite.Sprite):
@@ -46,6 +51,7 @@ class Brick(pyglet.sprite.Sprite):
         self.y = self.game.base_y - (self.row + 1) * self.game.brick_px  # +1 because of anchor point
 
     def delete(self):
+        log.debug("Brick delete, type %s", type(self))
         self.dirty.discard(self)
         self.bricks.remove(self)
         super().delete()
@@ -70,6 +76,8 @@ class DOWN: dcol = 0; drow = 1; image_fname = 'hero_down.png'
 class LEFT: dcol = -1; drow = 0; image_fname = 'hero_left.png'
 
 class Hero(Brick):
+    STEP = 0.2
+
     health = 10
     max_health = 10
     potion = 0
@@ -85,7 +93,7 @@ class Hero(Brick):
         row = self.game.ROWS // 2
         self.direction = RIGHT
         super().__init__(pyglet.resource.image(self.direction.image_fname), col, row)
-        self.game.push_handlers(self.on_key_press)
+        pyglet.clock.schedule_interval(self.step, self.STEP)
 
     def armor_limit(self):
         if armor >= 10:
@@ -122,38 +130,53 @@ class Hero(Brick):
             health = max_health
 
 
-    def on_key_press(self, symbol, modifiers):
-        should_move = False
-        if symbol == key.UP:
+    def step(self, dt):
+        want_move = False
+        if self.game.keys[key.UP]:
             self.direction = UP
-            should_move = True
-        elif symbol == key.RIGHT:
+            want_move = True
+        elif self.game.keys[key.RIGHT]:
             self.direction = RIGHT
-            should_move = True
-        elif symbol == key.DOWN:
+            want_move = True
+        elif self.game.keys[key.DOWN]:
             self.direction = DOWN
-            should_move = True
-        elif symbol == key.LEFT:
+            want_move = True
+        elif self.game.keys[key.LEFT]:
             self.direction = LEFT
-            should_move = True
+            want_move = True
 
-        if should_move:
+        want_fight = False
+        if self.game.keys[key.SPACE]:
+            want_fight = True
+
+        if want_move:
             self.image = pyglet.resource.image(self.direction.image_fname)
+        if want_fight or want_move:
             col, row = self.col + self.direction.dcol, self.row + self.direction.drow
-            if not self.check_collision(col, row):
-                self.col, self.row = col, row
+            obstacle = self.check_collision(col, row)
+            if not obstacle:
+                if want_move:
+                    self.col, self.row = col, row
+            elif isinstance(obstacle, Monster) and want_fight:
+                obstacle.start_fight()
+
 
     def delete(self):
-        self.game.pop_handlers()
+        pyglet.clock.unschedule(self.step)
         super().delete()
+
 
 
 class Monster(Brick):
     STEP = 0.5
     VISION_RADIUS = 5
+    monsters = set()
+
     def __init__(self):
         self.monster_image = pyglet.resource.image('troll.png')
         super().__init__(self.monster_image)
+        self.monsters.add(self)
+        self.in_fight = False
 
         while True:
             col = random.randint(1, self.game.COLUMNS-2)
@@ -193,9 +216,28 @@ class Monster(Brick):
         col, row = self.col + direction.dcol, self.row + direction.drow
         return math.hypot(col - self.game.hero.col, row - self.game.hero.row)
 
+
+    def start_fight(self):
+        if self.in_fight:
+            return
+        log.debug("Start fight")
+        self.in_fight = True
+        pyglet.clock.unschedule(self.move)
+        self.image = pyglet.resource.image('blood.png')
+        pyglet.clock.schedule_once(self.end_fight, self.STEP)
+
+
+    def end_fight(self, dt):
+        log.debug("End fight")
+        self.delete()
+
+
     def delete(self):
         pyglet.clock.unschedule(self.move)
+        pyglet.clock.unschedule(self.end_fight)
+        self.monsters.remove(self)
         super().delete()
+
 
 
 class Game(pyglet.window.Window):
@@ -263,17 +305,19 @@ class Game(pyglet.window.Window):
                 else:
                     Floor(self.ground_image, col, row)
 
-        self.hero = self.monsters = None
+        self.hero = None
 
 
     def start(self):
         if self.hero:
             self.hero.delete()
         self.hero = Hero()
-        if self.monsters:
-            for monster in self.monsters:
-                monster.delete()
-        self.monsters = {Monster() for x in range(100)}
+        while Monster.monsters:
+            for monster in Monster.monsters:
+                break  # Idiomatic get item without removing
+            monster.delete()
+        for x in range(10):
+            Monster()
         pyglet.clock.unschedule(self.update)
         pyglet.clock.tick()
         pyglet.clock.schedule(func=self.update)
