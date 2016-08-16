@@ -117,9 +117,6 @@ class Hero(Brick):
         elif self.health < self.max_health:
             return
 
-    def xp_up(self, xp):
-        self.xp += xp
-
     def hp_limit(self):
         if self.health > self.max_health:
             self.health = self.max_health
@@ -129,6 +126,12 @@ class Hero(Brick):
             self.level += 1
             self.max_health += self.level
             self.health = self.max_health
+    
+    def die(self):
+        if self.health <= 0:
+            self.image = pyglet.resource.image('rip.png')
+            self.game.label.text = "Game Over"
+            pyglet.clock.unschedule(self.step)          
 
 
     def step(self, dt):
@@ -191,6 +194,7 @@ class Hero(Brick):
         
         self.game.set_label_text()
         self.level_up()
+        self.die()
     def delete(self):
         pyglet.clock.unschedule(self.step)
         super().delete()
