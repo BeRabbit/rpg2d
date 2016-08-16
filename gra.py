@@ -78,12 +78,26 @@ class LEFT: dcol = -1; drow = 0; image_fname = 'hero_left.png'
 class Hero(Brick):
     STEP = 0.2
 
+<<<<<<< HEAD
+=======
+    health = 10
+    max_health = 10
+    potion = 0
+    xp = 0
+    level = 1
+    armor = 0
+    max_armor = 10
+    sword = 0
+    max_sword = 10
+
+>>>>>>> d8975ddb1442113c9a3020208ba4dee68a74baf2
     def __init__(self):
         col = self.game.COLUMNS // 2
         row = self.game.ROWS // 2
         self.direction = RIGHT
         super().__init__(pyglet.resource.image(self.direction.image_fname), col, row)
         pyglet.clock.schedule_interval(self.step, self.STEP)
+<<<<<<< HEAD
         
         self.health = 10
         self.max_health = 10
@@ -105,6 +119,16 @@ class Hero(Brick):
     def sword_limit(self):
         if self.sword >= 10:
             self.sword = self.max_sword
+=======
+
+    def armor_limit(self):
+        if armor >= 10:
+            armor = max_armor
+
+    def sword_limit(self):
+        if sword >= 10:
+            sword = max_sword
+>>>>>>> d8975ddb1442113c9a3020208ba4dee68a74baf2
 
     def use_potion(self):
         if self.health < self.max_health:
@@ -118,6 +142,7 @@ class Hero(Brick):
             return
 
     def xp_up(self, xp):
+<<<<<<< HEAD
         self.xp += xp
 
     def hp_limit(self):
@@ -129,6 +154,21 @@ class Hero(Brick):
             self.level += 1
             self.max_health += self.level
             self.health = self.max_health
+=======
+        xp += xp
+        print ("Otrzymałeś: %s XP" % xp)
+
+    def hp_limit(self):
+        if health > max_health:
+            health = max_health
+
+    def level_up(self):
+        if xp >= level**2 * 10:
+            level += 1
+            print ("Twój poziom postaci się zwiększył ", level)
+            max_health += level
+            health = max_health
+>>>>>>> d8975ddb1442113c9a3020208ba4dee68a74baf2
 
 
     def step(self, dt):
@@ -159,6 +199,7 @@ class Hero(Brick):
                 if want_move:
                     self.col, self.row = col, row
             elif isinstance(obstacle, Monster) and want_fight:
+<<<<<<< HEAD
                 self.fight(obstacle)
 
     def calc_damage(self, attack, defense):
@@ -195,20 +236,37 @@ class Hero(Brick):
         pyglet.clock.unschedule(self.step)
         super().delete()
         
+=======
+                obstacle.start_fight()
+
+
+    def delete(self):
+        pyglet.clock.unschedule(self.step)
+        super().delete()
+
+
+>>>>>>> d8975ddb1442113c9a3020208ba4dee68a74baf2
 
 class Monster(Brick):
     STEP = 0.5
     VISION_RADIUS = 5
     monsters = set()
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> d8975ddb1442113c9a3020208ba4dee68a74baf2
     def __init__(self):
         self.monster_image = pyglet.resource.image('troll.png')
         super().__init__(self.monster_image)
         self.monsters.add(self)
         self.in_fight = False
+<<<<<<< HEAD
         self.statistics()
         
+=======
+
+>>>>>>> d8975ddb1442113c9a3020208ba4dee68a74baf2
         while True:
             col = random.randint(1, self.game.COLUMNS-2)
             row = random.randint(1, self.game.ROWS-2)
@@ -220,6 +278,7 @@ class Monster(Brick):
         pyglet.clock.schedule_interval(self.move, self.STEP - 0.1 * random.random())
 
 
+<<<<<<< HEAD
     def statistics(self):
         if self.game.hero.level > 0 and self.game.hero.level < 10:
             self.hp = random.randint(2,10)       # HP
@@ -249,6 +308,8 @@ class Monster(Brick):
 
 
 
+=======
+>>>>>>> d8975ddb1442113c9a3020208ba4dee68a74baf2
     def move(self, dt):
         current_distance = math.hypot(self.col - self.game.hero.col, self.row - self.game.hero.row)
 
@@ -287,7 +348,10 @@ class Monster(Brick):
         pyglet.clock.schedule_once(self.end_fight, self.STEP)
 
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> d8975ddb1442113c9a3020208ba4dee68a74baf2
     def end_fight(self, dt):
         log.debug("End fight")
         self.delete()
