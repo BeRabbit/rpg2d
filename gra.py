@@ -10,12 +10,12 @@ from pyglet.window import key
 
 # Used to order sprites
 background = pyglet.graphics.OrderedGroup(0)
-foreground = pyglet.graphics.OrderedGroup(1)
-hud = pyglet.graphics.OrderedGroup(2)
+on_floor = pyglet.graphics.OrderedGroup(1)
+foreground = pyglet.graphics.OrderedGroup(2)
+hud = pyglet.graphics.OrderedGroup(3)
 
 
-log.basicConfig(level=log.DEBUG)
-
+log.basicConfig(filename='GameLogs.log', level=log.DEBUG, format = '%(asctime)s %(message)s')
 
 class Brick(pyglet.sprite.Sprite):
     bricks = set()
@@ -57,9 +57,12 @@ class Brick(pyglet.sprite.Sprite):
         super().delete()
 
     @classmethod
-    def check_collision(cls, col, row):
+    def check_collision(cls, col, row, types=None):
+        if types is None:
+            types = (Wall, Monster, Hero, Chest)
+
         for brick in cls.bricks:
-            if col == brick.col and row == brick.row and isinstance(brick, (Wall, Monster, Hero)):
+            if col == brick.col and row == brick.row and isinstance(brick, types):
                 return brick
         else:
             return  # No collision, return None
@@ -83,6 +86,7 @@ class Hero(Brick):
         row = self.game.ROWS // 2
         self.direction = RIGHT
         super().__init__(pyglet.resource.image(self.direction.image_fname), col, row)
+        log.debug("Draw %s", type (self))
         pyglet.clock.schedule_interval(self.step, self.STEP)
         
         self.health = 10
@@ -138,32 +142,47 @@ class Hero(Brick):
         want_move = False
         if self.game.keys[key.UP]:
             self.direction = UP
+            log.debug('Go Up')
             want_move = True
         elif self.game.keys[key.RIGHT]:
             self.direction = RIGHT
+            log.debug('Go Right')
             want_move = True
         elif self.game.keys[key.DOWN]:
             self.direction = DOWN
+            log.debug('Go Down')
             want_move = True
         elif self.game.keys[key.LEFT]:
             self.direction = LEFT
+            log.debug('Go Left')
             want_move = True
 
-        want_fight = False
+        want_action = False
+        
         if self.game.keys[key.SPACE]:
-            want_fight = True
-
+            log.debug('Start Fight')
+            want_action = True
         if want_move:
             self.image = pyglet.resource.image(self.direction.image_fname)
-        if want_fight or want_move:
+        if want_action or want_move:
             col, row = self.col + self.direction.dcol, self.row + self.direction.drow
             obstacle = self.check_collision(col, row)
             if not obstacle:
                 if want_move:
                     self.col, self.row = col, row
-            elif isinstance(obstacle, Monster) and want_fight:
+                    armor = self.check_collision(col, row, Armor)
+                    if armor:
+                        self.armor += 1
+                        armor.delete()
+            
+            elif isinstance(obstacle, Monster) and want_action:
                 self.fight(obstacle)
-
+            elif isinstance(obstacle, Chest) and want_action:
+                self.open(obstacle)
+                
+        self.game.set_label_text()
+        
+        
     def calc_damage(self, attack, defense):
         a = int(random.random() * attack)
         d = int(random.random() * defense)
@@ -195,6 +214,10 @@ class Hero(Brick):
         self.game.set_label_text()
         self.level_up()
         self.die()
+        
+    def open(self, chest):
+        chest.open()
+    
     def delete(self):
         pyglet.clock.unschedule(self.step)
         super().delete()
@@ -208,6 +231,7 @@ class Monster(Brick):
 
     def __init__(self):
         self.monster_image = pyglet.resource.image('troll.png')
+        log.debug('Sprite Monster')
         super().__init__(self.monster_image)
         self.monsters.add(self)
         self.in_fight = False
@@ -303,8 +327,48 @@ class Monster(Brick):
         self.monsters.remove(self)
         super().delete()
 
+class Armor(Brick):
+    def __init__(self, col, row):
+        file_name = random.choice(['armour_left.png', 'armour_right.png', 'helmet_left.png', 
+                'helmet_right.png', 'legarmor_left.png', 'legarmor_right.png', 'boot_right.png',
+                'boot_left.png', 'shield_left.png', 'shield_right.png'])
+        super().__init__(pyglet.resource.image(file_name), col, row, group=on_floor)
+        
+        
 
-
+class Chest(Brick):
+    STEP = 0.9
+    
+    def __init__(self):
+        self.chest_image = pyglet.resource.image('chest_close.png')
+        super().__init__(self.chest_image)
+        self.is_open = False
+    
+        while True:
+            col = random.randint(1, self.game.COLUMNS-2)
+            row = random.randint(1, self.game.ROWS-2)
+            if not self.check_collision(col, row):
+                break
+        self.col = col
+        self.row = row
+    
+    def open(self):
+        if self.is_open:
+            return
+        self.is_open = True
+        self.image = pyglet.resource.image('chest_open.png')
+        pyglet.clock.schedule_once(self.end_opening, self.STEP)
+        
+    def end_opening(self, dt):
+        Armor(self.col, self.row)
+        self.delete()
+        
+    
+    def delete(self):
+        pyglet.clock.unschedule(self.end_opening)
+        super().delete()
+        
+    
 class Game(pyglet.window.Window):
     STEP = 0.3  # Seconds
     COLUMNS = 32
@@ -366,23 +430,30 @@ class Game(pyglet.window.Window):
             for col in range(self.COLUMNS):
                 if (row == 0 or col == 0
                         or row == self.ROWS-1 or col == self.COLUMNS-1):
-                    Wall(self.brick_image, col, row)
+                    Wall(self.brick_image, col, row, group=background)
                 else:
-                    Floor(self.ground_image, col, row)
+                    Floor(self.ground_image, col, row, group=background)
 
-        self.hero = None
+        self.hero = self.chest = None
 
 
     def start(self):
+        log.debug('----------------New Logs----------------------')
+        log.debug('                                              ')
+        log.debug('                                              ')
         if self.hero:
             self.hero.delete()
         self.hero = Hero()
+        log.debug('Sprite Hero')
         while Monster.monsters:
             for monster in Monster.monsters:
                 break  # Idiomatic get item without removing
             monster.delete()
         for x in range(10):
             Monster()
+        if self.chest:
+            self.chest.delete()
+        self.chest = Chest()
         pyglet.clock.unschedule(self.update)
         pyglet.clock.tick()
         pyglet.clock.schedule(func=self.update)
