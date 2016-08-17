@@ -174,7 +174,10 @@ class Hero(Brick):
                     if armor:
                         self.armor += 1
                         armor.delete()
-            
+                    sword = self.check_collision(col, row, Sword)
+                    if sword:
+                        self.sword += 1
+                        sword.delete()
             elif isinstance(obstacle, Monster) and want_action:
                 self.fight(obstacle)
             elif isinstance(obstacle, Chest) and want_action:
@@ -329,19 +332,24 @@ class Monster(Brick):
 
 class Armor(Brick):
     def __init__(self, col, row):
-        file_name = random.choice(['armour_left.png', 'armour_right.png', 'helmet_left.png', 
+        file_name = random.choice(['armor_left.png', 'armor_right.png', 'helmet_left.png', 
                 'helmet_right.png', 'legarmor_left.png', 'legarmor_right.png', 'boot_right.png',
                 'boot_left.png', 'shield_left.png', 'shield_right.png'])
         super().__init__(pyglet.resource.image(file_name), col, row, group=on_floor)
         
-        
+class Sword(Brick):
+    def __init__(self,col, row):
+        file_name = random.choice(['sword_piece_one.png','sword_piece_two.png','sword_piece_three.png'])
+        super().__init__(pyglet.resource.image(file_name), col, row, group=on_floor)
 
 class Chest(Brick):
     STEP = 0.9
+    chests = set()
     
     def __init__(self):
         self.chest_image = pyglet.resource.image('chest_close.png')
         super().__init__(self.chest_image)
+        self.chests.add(self)
         self.is_open = False
     
         while True:
@@ -360,12 +368,13 @@ class Chest(Brick):
         pyglet.clock.schedule_once(self.end_opening, self.STEP)
         
     def end_opening(self, dt):
-        Armor(self.col, self.row)
+        random.choice ([Armor,Sword])(self.col, self.row)
         self.delete()
         
     
     def delete(self):
         pyglet.clock.unschedule(self.end_opening)
+        self.chests.remove(self)
         super().delete()
         
     
@@ -441,19 +450,26 @@ class Game(pyglet.window.Window):
         log.debug('----------------New Logs----------------------')
         log.debug('                                              ')
         log.debug('                                              ')
+        
         if self.hero:
             self.hero.delete()
         self.hero = Hero()
         log.debug('Sprite Hero')
+        
         while Monster.monsters:
             for monster in Monster.monsters:
                 break  # Idiomatic get item without removing
             monster.delete()
         for x in range(10):
             Monster()
-        if self.chest:
-            self.chest.delete()
-        self.chest = Chest()
+            
+        while Chest.chests:
+            for chest in Chest.chests:
+                break  
+            chest.delete()
+        for x in range(2):
+            Chest()
+            
         pyglet.clock.unschedule(self.update)
         pyglet.clock.tick()
         pyglet.clock.schedule(func=self.update)
