@@ -59,7 +59,7 @@ class Brick(pyglet.sprite.Sprite):
     @classmethod
     def check_collision(cls, col, row, types=None):
         if types is None:
-            types = (Wall, Monster, Hero, Chest)
+            types = (Wall, Monster, Hero, Chest, Door)
 
         for brick in cls.bricks:
             if col == brick.col and row == brick.row and isinstance(brick, types):
@@ -79,7 +79,7 @@ class DOWN: dcol = 0; drow = 1; image_fname = 'hero_down.png'
 class LEFT: dcol = -1; drow = 0; image_fname = 'hero_left.png'
 
 class Hero(Brick):
-    STEP = 0.2
+    STEP = 0.01
 
     def __init__(self):
         col = self.game.COLUMNS // 2
@@ -102,12 +102,12 @@ class Hero(Brick):
         self.defense = 5 + self.level//2
 
     def armor_limit(self):
-        if self.armor >= 10:
+        if self.armor > 10:
             self.armor = self.max_armor
 
 
     def sword_limit(self):
-        if self.sword >= 10:
+        if self.sword > 10:
             self.sword = self.max_sword
 
     def use_potion(self):
@@ -160,7 +160,7 @@ class Hero(Brick):
         want_action = False
         
         if self.game.keys[key.SPACE]:
-            log.debug('Start Fight')
+            log.debug('Start Action')
             want_action = True
         if want_move:
             self.image = pyglet.resource.image(self.direction.image_fname)
@@ -173,15 +173,19 @@ class Hero(Brick):
                     armor = self.check_collision(col, row, Armor)
                     if armor:
                         self.armor += 1
+                        self.armor_limit()
                         armor.delete()
                     sword = self.check_collision(col, row, Sword)
                     if sword:
                         self.sword += 1
+                        self.sword_limit()
                         sword.delete()
             elif isinstance(obstacle, Monster) and want_action:
                 self.fight(obstacle)
             elif isinstance(obstacle, Chest) and want_action:
-                self.open(obstacle)
+                self.open_chest(obstacle)
+            elif isinstance(obstacle, Door) and want_action:
+                self.open_door(obstacle)
                 
         self.game.set_label_text()
         
@@ -217,9 +221,13 @@ class Hero(Brick):
         self.game.set_label_text()
         self.level_up()
         self.die()
+        self.hp_limit
         
-    def open(self, chest):
+    def open_chest(self, chest):
         chest.open()
+        
+    def open_door(self, door):
+        door.open()    
     
     def delete(self):
         pyglet.clock.unschedule(self.step)
@@ -377,6 +385,43 @@ class Chest(Brick):
         self.chests.remove(self)
         super().delete()
         
+class Door(Brick):
+    STEP = 0.9
+    doors = set()
+    
+    def __init__(self):
+        self.door_image = pyglet.resource.image('trapdoor_close.png')
+        super().__init__(self.door_image)
+        self.doors.add(self)
+        self.is_open = False
+    
+        while True:
+            col = random.randint(1, self.game.COLUMNS-2)
+            row = random.randint(1, self.game.ROWS-2)
+            if not self.check_collision(col, row):
+                break
+        self.col = col
+        self.row = row
+        
+    def open(self):
+        if self.is_open:
+            return
+        self.is_open = True
+        self.image = pyglet.resource.image('trapdoor_open.png')
+        pyglet.clock.schedule_once(self.end_opening, self.STEP)
+    
+    def end_opening(self, dt):
+        self.delete()
+        self.game.start_level()
+        
+    
+    def delete(self):
+        pyglet.clock.unschedule(self.end_opening)
+        self.doors.remove(self)
+        super().delete()
+        
+        
+        
     
 class Game(pyglet.window.Window):
     STEP = 0.3  # Seconds
@@ -435,6 +480,23 @@ class Game(pyglet.window.Window):
         self.ground_image = pyglet.resource.image('ground.png')
         self.brick_image = pyglet.resource.image('wall.png')
         Brick.game = self  # Set up globally used game object
+        
+        self.hero = None
+
+
+    def start_game(self):
+
+        if self.hero:
+            self.hero.delete()
+        self.hero = Hero()
+       
+        
+    def start_level(self):
+    
+        for brick in list(Brick.bricks):
+            if not isinstance(brick, Hero):
+                brick.delete()
+    
         for row in range(self.ROWS):
             for col in range(self.COLUMNS):
                 if (row == 0 or col == 0
@@ -442,34 +504,20 @@ class Game(pyglet.window.Window):
                     Wall(self.brick_image, col, row, group=background)
                 else:
                     Floor(self.ground_image, col, row, group=background)
-
-        self.hero = self.chest = None
-
-
-    def start(self):
-        log.debug('----------------New Logs----------------------')
-        log.debug('                                              ')
-        log.debug('                                              ')
+                    
+                
+                
         
-        if self.hero:
-            self.hero.delete()
-        self.hero = Hero()
-        log.debug('Sprite Hero')
-        
-        while Monster.monsters:
-            for monster in Monster.monsters:
-                break  # Idiomatic get item without removing
-            monster.delete()
-        for x in range(10):
+        for x in range(random.randint(3,9)):
             Monster()
             
-        while Chest.chests:
-            for chest in Chest.chests:
-                break  
-            chest.delete()
-        for x in range(2):
+        for x in range(random.randint(1,3)):
             Chest()
-            
+
+        for x in range(1):
+            Door()
+       
+        
         pyglet.clock.unschedule(self.update)
         pyglet.clock.tick()
         pyglet.clock.schedule(func=self.update)
@@ -535,7 +583,8 @@ class Game(pyglet.window.Window):
     def on_key_press(self, symbol, modifiers):
         super().on_key_press(symbol, modifiers)
         if symbol == key.R:
-            self.start()
+            self.start_game()
+            self.start_level()
 
 
     def update(self, dt):
