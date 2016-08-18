@@ -9,13 +9,14 @@ from pyglet.window import key
 
 
 # Used to order sprites
-background = pyglet.graphics.OrderedGroup(0)
-on_floor = pyglet.graphics.OrderedGroup(1)
-foreground = pyglet.graphics.OrderedGroup(2)
-hud = pyglet.graphics.OrderedGroup(3)
+back_image = pyglet.graphics.OrderedGroup(0)
+background = pyglet.graphics.OrderedGroup(1)
+on_floor = pyglet.graphics.OrderedGroup(2)
+foreground = pyglet.graphics.OrderedGroup(3)
+hud = pyglet.graphics.OrderedGroup(4)
 
 
-log.basicConfig(filename='GameLogs.log', level=log.DEBUG, format = '%(asctime)s %(message)s')
+log.basicConfig(level=log.DEBUG, format = '%(asctime)s %(message)s')
 
 class Brick(pyglet.sprite.Sprite):
     bricks = set()
@@ -419,8 +420,42 @@ class Door(Brick):
         pyglet.clock.unschedule(self.end_opening)
         self.doors.remove(self)
         super().delete()
+
+UNVISITED, VISITED_FLOOR, VISITED_WALL = range(3)
+def generate_dungeon(width, height, start_col, start_row):
+    dungeon = [[UNVISITED for row in range(height)] for col in range(width)]
+    for row in range(height):
+        for col in range(width):
+            if (row == 0 or col == 0
+                    or row == height-1 or col == width-1):
+                dungeon[col][row] = VISITED_WALL
+
+    dungeon[start_col][start_row] = VISITED_FLOOR
+    nodes = [(start_col, start_row)]
+    while nodes:
+        node = col, row = nodes.pop()
+        neighbours = [(col-1, row), (col+1, row), (col, row-1), (col, row+1)]
+        kinds = {UNVISITED: [], VISITED_FLOOR: [], VISITED_WALL: []}
+        for neighbour in neighbours:
+            ncol, nrow = neighbour
+            kinds[dungeon[ncol][nrow]].append(neighbour)
         
-        
+        random.shuffle(kinds[UNVISITED])
+        for unvisited in kinds[UNVISITED]:
+            ucol, urow = unvisited
+            if len(kinds[VISITED_FLOOR]) < 2:
+                new_kind = VISITED_FLOOR
+            elif not kinds[VISITED_WALL]:
+                new_kind = VISITED_WALL
+            else:
+                new_kind = random.choice([VISITED_FLOOR, VISITED_WALL])
+
+            dungeon[ucol][urow] = new_kind
+            kinds[new_kind].append(unvisited)
+            if new_kind == VISITED_FLOOR:
+                nodes.append(unvisited)
+                
+    return dungeon
         
     
 class Game(pyglet.window.Window):
@@ -475,7 +510,7 @@ class Game(pyglet.window.Window):
 
         self.back_image = pyglet.resource.image('background.png')
         self.back = pyglet.sprite.Sprite(
-                self.back_image, batch=self.batch, group=background)
+                self.back_image, batch=self.batch, group=back_image)
 
         self.ground_image = pyglet.resource.image('ground.png')
         self.brick_image = pyglet.resource.image('wall.png')
@@ -492,22 +527,21 @@ class Game(pyglet.window.Window):
        
         
     def start_level(self):
-    
         for brick in list(Brick.bricks):
             if not isinstance(brick, Hero):
                 brick.delete()
     
+        dungeon = generate_dungeon(self.COLUMNS, self.ROWS, self.hero.col, self.hero.row)
+    
         for row in range(self.ROWS):
             for col in range(self.COLUMNS):
-                if (row == 0 or col == 0
-                        or row == self.ROWS-1 or col == self.COLUMNS-1):
-                    Wall(self.brick_image, col, row, group=background)
-                else:
+                if dungeon[col][row] == VISITED_FLOOR:
+                    log.debug("Floor")
                     Floor(self.ground_image, col, row, group=background)
-                    
-                
-                
-        
+                else:
+                    log.debug("Wall")
+                    Wall(self.brick_image, col, row, group=background)
+       
         for x in range(random.randint(3,9)):
             Monster()
             
@@ -515,8 +549,7 @@ class Game(pyglet.window.Window):
             Chest()
 
         for x in range(1):
-            Door()
-       
+            Door()       
         
         pyglet.clock.unschedule(self.update)
         pyglet.clock.tick()
